@@ -45,7 +45,7 @@ export const is = {
     const result = registers[Rn] - parseOperand(Op2);
     flags.carry = result >= 0 ? 1 : 0;
   },
-  /** Rd := (Rn AND NOT Op2) OR (op2 AND NOT Rn) */
+  /** Rd := (Rn AND NOT Op2) OR (Op2 AND NOT Rn) */
   EOR(Rd: Register, Rn: Register, Op2: OperandInput) {
     registers[Rd] = registers[Rn] ^ parseOperand(Op2);
   },
@@ -61,7 +61,7 @@ export const is = {
   SBC(Rd: Register, Rn: Register, Op2: OperandInput) {
     const result = registers[Rn] - parseOperand(Op2) - 1 + flags.carry;
     registers[Rd] = result >>> 0;
-    flags.carry = result > 0xffffffff ? 1 : 0;
+    flags.carry = result >= 0 ? 1 : 0;
   },
   /** Rd := Rn - Op2 */
   SUB(Rd: Register, Rn: Register, Op2: OperandInput) {
