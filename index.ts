@@ -22,58 +22,58 @@ const flags = {
 };
 
 type Register = keyof typeof registers;
-type OperandInput = Register | ({} & string);
+type Operand = Register | `#${number}`;
 
 /** ARM instruction set */
 export const is = {
   /** Rd := Rn + Op2 + Carry */
-  ADC(Rd: Register, Rn: Register, Op2: OperandInput) {
+  ADC(Rd: Register, Rn: Register, Op2: Operand) {
     const result = registers[Rn] + parseOperand(Op2) + flags.carry;
     registers[Rd] = result >>> 0;
     flags.carry = result > 0xffffffff ? 1 : 0;
   },
   /** Rd := Rn + Op2 */
-  ADD(Rd: Register, Rn: Register, Op2: OperandInput) {
+  ADD(Rd: Register, Rn: Register, Op2: Operand) {
     registers[Rd] = registers[Rn] + parseOperand(Op2);
   },
   /** Rd := Rn AND Op2 */
-  AND(Rd: Register, Rn: Register, Op2: OperandInput) {
+  AND(Rd: Register, Rn: Register, Op2: Operand) {
     registers[Rd] = registers[Rn] & parseOperand(Op2);
   },
   /** CPSR flags := Rn - Op2 */
-  CMP(Rn: Register, Op2: OperandInput) {
+  CMP(Rn: Register, Op2: Operand) {
     const result = registers[Rn] - parseOperand(Op2);
     flags.carry = result >= 0 ? 1 : 0;
   },
   /** Rd := (Rn AND NOT Op2) OR (Op2 AND NOT Rn) */
-  EOR(Rd: Register, Rn: Register, Op2: OperandInput) {
+  EOR(Rd: Register, Rn: Register, Op2: Operand) {
     registers[Rd] = registers[Rn] ^ parseOperand(Op2);
   },
   /** Rd := Op2 */
-  MOV(Rd: Register, Op2: OperandInput) {
+  MOV(Rd: Register, Op2: Operand) {
     registers[Rd] = parseOperand(Op2);
   },
-  /** Rd := Rm * Rs */
-  MUL(Rd: Register, Rn: Register, Op2: OperandInput) {
-    registers[Rd] = registers[Rn] * parseOperand(Op2);
+  /** Rd := Rn * Rm */
+  MUL(Rd: Register, Rn: Register, Rm: Register) {
+    registers[Rd] = registers[Rn] * registers[Rm];
   },
   /** Rd := Rn OR Op2 */
-  ORR(Rd: Register, Rn: Register, Op2: OperandInput) {
+  ORR(Rd: Register, Rn: Register, Op2: Operand) {
     registers[Rd] = registers[Rn] | parseOperand(Op2);
   },
   /** Rd := Rn - Op2 - 1 + Carry */
-  SBC(Rd: Register, Rn: Register, Op2: OperandInput) {
+  SBC(Rd: Register, Rn: Register, Op2: Operand) {
     const result = registers[Rn] - parseOperand(Op2) - 1 + flags.carry;
     registers[Rd] = result >>> 0;
     flags.carry = result >= 0 ? 1 : 0;
   },
   /** Rd := Rn - Op2 */
-  SUB(Rd: Register, Rn: Register, Op2: OperandInput) {
+  SUB(Rd: Register, Rn: Register, Op2: Operand) {
     registers[Rd] = registers[Rn] - parseOperand(Op2);
   },
 } as const;
 
-function parseOperand(op: Register | ({} & string)) {
+function parseOperand(op: Operand) {
   if (op.startsWith("#")) return parseInt(op.slice(1));
   return registers[op as Register];
 }
