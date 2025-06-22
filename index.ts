@@ -53,6 +53,10 @@ export const is = {
   MOV(Rd: Register, Op2: OperandInput) {
     registers[Rd] = parseOperand(Op2);
   },
+  /** Rd := Rm * Rs */
+  MUL(Rd: Register, Rn: Register, Op2: OperandInput) {
+    registers[Rd] = registers[Rn] * parseOperand(Op2);
+  },
   /** Rd := Rn OR Op2 */
   ORR(Rd: Register, Rn: Register, Op2: OperandInput) {
     registers[Rd] = registers[Rn] | parseOperand(Op2);
@@ -90,9 +94,10 @@ export function run(asm: string) {
 
 // Example ASM
 // run(`
-// MOV R0, #5
-// MOV R1, #10
+// MOV R0, #3
+// MOV R1, #4
 // ADD R2, R0, R1
-// SUB R3, R2, #4
+// MUL R3, R0, R1
+// ADD R4, R2, R3
 // `);
 // console.log(registers);
