@@ -1,5 +1,6 @@
 ; Requires a message loaded into memory beforehand
-MOV R0, #0      ; Current letter index
+MOV R0, #0          ; Current letter index
+MOV R1, #0x0f28     ; Current frame index
 loop:
     LDR R2, R0      ; Load letter from mem
     CMP R2, #59     ; Reset at semicolon in msg
@@ -7,5 +8,5 @@ loop:
     STRNE R2, R1    ; Place into frame buffer
     ADD R0, R0, #1
     ADD R1, R1, #1
-CMP R1, #4096   ; Stop once it hits the bounds of the frame
+CMP R1, #4096       ; Stop once it hits the bounds of the frame
 BNE loop

@@ -2,7 +2,7 @@ import { memory, registers, type Register } from ".";
 
 const WIDTH = 27;
 const HEIGHT = 8;
-export const VRAM_BASE = 0x1000 - WIDTH * HEIGHT;
+const VRAM_BASE = 0x0f28;
 
 export function displayStats() {
   const termWidth = process.stdout.columns || 80;
