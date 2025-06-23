@@ -14,6 +14,7 @@ export function parseASM(asm: string): Instruction[] {
     if (!/:$/.test(line)) continue;
     labelMap.set(line.slice(0, -1), i);
     lines.splice(i, 1);
+    --i;
   }
 
   for (let i = 0; i < lines.length; ++i) {

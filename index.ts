@@ -144,7 +144,7 @@ function checkCondition(condition: Condition[] | Condition): boolean {
     return typeof eq === "number" ? val === eq : val === flags.cpsr[eq];
   }
   if (ne !== undefined) {
-    return typeof ne === "number" ? val === ne : val === flags.cpsr[ne];
+    return typeof ne === "number" ? val !== ne : val !== flags.cpsr[ne];
   }
 
   return false;

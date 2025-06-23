@@ -9,4 +9,4 @@ loop:
     ADD R0, R0, #1
     ADD R1, R1, #1
 CMP R1, #4096       ; Stop once it hits the bounds of the frame
-BNE loop
+BLT loop
