@@ -1,6 +1,20 @@
-import { readFileSync } from "node:fs";
+import { displayStats } from "./stats";
 
-const registers = {
+export type Mnemonic = keyof typeof is;
+export type Register = keyof typeof registers;
+export type Operand = Register | `#${number}`;
+interface Condition {
+  v: "N" | "Z" | "C" | "V";
+  eq?: Condition["v"] | 0 | 1;
+  ne?: Condition["v"] | 0 | 1;
+}
+export interface Instruction {
+  mnemonic: Mnemonic;
+  operands: Operand[];
+  conditions: (Condition[] | Condition)[];
+}
+
+export const registers = {
   R0: 0,
   R1: 0,
   R2: 0,
@@ -18,7 +32,7 @@ const registers = {
   R14: 0,
   R15: 0,
 };
-const flags = {
+export const flags = {
   carry: 0,
   tbit: 0,
   cpsr: {
@@ -28,27 +42,7 @@ const flags = {
     V: 0,
   },
 };
-const memory = new Uint32Array(0x2000);
-
-const WIDTH = 27;
-const HEIGHT = 4;
-const VRAM_BASE = 0x1000;
-
-function renderFramebuffer() {
-  let output = "";
-  for (let y = 0; y < HEIGHT; ++y) {
-    for (let x = 0; x < WIDTH; ++x) {
-      const addr = VRAM_BASE + y * WIDTH + x;
-      output += memory[addr] ? String.fromCharCode(memory[addr]) : " ";
-    }
-    output += "\n";
-  }
-  console.clear();
-  console.log(output);
-}
-
-type Register = keyof typeof registers;
-type Operand = Register | `#${number}`;
+export const memory = new Uint32Array(0x1000);
 
 /** ARM instruction set */
 export const is = {
@@ -138,76 +132,61 @@ function parseOperand(op: Operand) {
   return registers[op as Register];
 }
 
-export function createRunner(asm: string) {
-  const lines = asm
-    .replaceAll(/,|;.+/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+function checkCondition(condition: Condition[] | Condition): boolean {
+  if (Array.isArray(condition)) {
+    return condition.some(checkCondition);
+  }
 
-  return {
+  const { v, eq, ne } = condition;
+  const val = flags.cpsr[v];
+
+  if (eq !== undefined) {
+    return typeof eq === "number" ? val === eq : val === flags.cpsr[eq];
+  }
+  if (ne !== undefined) {
+    return typeof ne === "number" ? val === ne : val === flags.cpsr[ne];
+  }
+
+  return false;
+}
+
+export function createRunner(instructions: Instruction[]) {
+  const runner = {
+    execute() {
+      const intervalId = setInterval(() => {
+        const done = runner.step();
+        displayStats();
+        if (done) {
+          clearInterval(intervalId);
+        }
+      });
+    },
     step() {
-      if (registers.R15 >= lines.length) return false;
-      const line = lines[registers.R15]!;
-      const [instr, ...rest] = line.split(/\s+/) as [string, ...string[]];
-      const key = instr.toUpperCase();
-      function run(key: keyof typeof is) {
-        const instruction = is[key];
-        if (instruction) {
+      if (registers.R15 >= instructions.length) return true;
+      const { mnemonic, operands, conditions } = instructions[registers.R15]!;
+      if (conditions.every(checkCondition)) {
+        const operation = is[mnemonic];
+        if (operation) {
           // @ts-expect-error
-          instruction(...rest);
+          operation(...operands);
         } else {
-          console.error("Unknown instruction:", instr);
+          console.error("Unknown mnemonic:", mnemonic);
         }
       }
-      switch (key.slice(-2)) {
-        case "EQ":
-          if (flags.cpsr.Z) {
-            run(key.slice(0, -2) as keyof typeof is);
-          }
-          break;
-        case "NE":
-          if (!flags.cpsr.Z) {
-            run(key.slice(0, -2) as keyof typeof is);
-          }
-          break;
-        default:
-          run(key as keyof typeof is);
-      }
-
       ++registers.R15;
-      return true; // still running
     },
     reset() {
-      registers.R15 = 0;
+      for (const key of Object.keys(registers)) {
+        registers[key as Register] = 0;
+      }
+      flags.carry = 0;
+      flags.tbit = 0;
+      flags.cpsr.C = 0;
+      flags.cpsr.N = 0;
+      flags.cpsr.V = 0;
+      flags.cpsr.Z = 0;
+      memory.fill(0);
     },
   };
+  return runner;
 }
-
-// Example ASM
-// run(`
-// MOV R0, #3
-// MOV R1, #4
-// ADD R2, R0, R1
-// MUL R3, R0, R1
-// ADD R4, R2, R3
-// B #2
-// MOV R5, #999 ; skipped due to B
-// MOV R6, #123
-// `);
-const message = "Hello, World!;";
-for (let i = 0; i < message.length; ++i) {
-  memory[i] = message.charCodeAt(i);
-}
-const runner = createRunner(readFileSync("scroll.asm", "utf8"));
-
-function run() {
-  const running = runner.step();
-  renderFramebuffer();
-  console.log(registers);
-  if (running) {
-    setTimeout(run);
-  }
-}
-
-run();
