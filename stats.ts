@@ -1,8 +1,8 @@
-import { memory, registers, type Register } from ".";
+import { memory, readMemory, registers, type Register } from ".";
 
 const WIDTH = 27;
 const HEIGHT = 8;
-const VRAM_BASE = 0x0f28;
+const VRAM_BASE = 0x800;
 
 export function displayStats() {
   const termWidth = process.stdout.columns || 80;
@@ -31,8 +31,9 @@ export function displayStats() {
   for (let y = 0; y < HEIGHT; ++y) {
     let line = "";
     for (let x = 0; x < WIDTH; ++x) {
-      const addr = VRAM_BASE + y * WIDTH + x;
-      line += memory[addr] ? String.fromCharCode(memory[addr]) : " ";
+      const addr = VRAM_BASE + (y * WIDTH + x);
+      const val = readMemory(addr, "B");
+      line += val ? new TextDecoder().decode(new Uint8Array([val])) : " ";
     }
     framebufferLines.push(line.padEnd(fbWidth, " "));
   }
@@ -46,7 +47,7 @@ export function displayStats() {
   for (let row = 0; row < totalRows; ++row) {
     const regName = regNames[row] ?? "";
     const regVal = regName
-      ? String(registers[regName]).padStart(regValueWidth, " ")
+      ? registers[regName].toString(16).padStart(regValueWidth, " ")
       : "".padEnd(regValueWidth, " ");
     const regText = regName
       ? `${regName.padEnd(maxRegNameWidth, " ")} ${regVal}`
@@ -58,7 +59,7 @@ export function displayStats() {
       let byte = 0;
       for (let b = 0; b < 8; ++b) {
         const addr = memOffset + i * 8 + b;
-        if (addr < memory.length && memory[addr]) {
+        if (addr < memory.length && readMemory(addr, "B")) {
           byte |= 1 << b;
         }
       }
@@ -73,3 +74,4 @@ export function displayStats() {
   console.clear();
   console.log(lines.join("\n"));
 }
+// parseInt("E890000E",16).toString(2)
