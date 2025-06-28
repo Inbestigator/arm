@@ -1,8 +1,8 @@
-import { memory, readMemory, registers, type Register } from ".";
+import { memory, registers, type Register } from ".";
 
 const WIDTH = 27;
 const HEIGHT = 8;
-const VRAM_BASE = 0x800;
+const VRAM_BASE = 0xa00;
 
 export function displayStats() {
   const termWidth = process.stdout.columns || 80;
@@ -27,16 +27,10 @@ export function displayStats() {
     return String.fromCharCode(brailleBase + byte);
   }
 
-  const framebufferLines: string[] = [];
-  for (let y = 0; y < HEIGHT; ++y) {
-    let line = "";
-    for (let x = 0; x < WIDTH; ++x) {
-      const addr = VRAM_BASE + (y * WIDTH + x);
-      const val = readMemory(addr, "B");
-      line += val ? new TextDecoder().decode(new Uint8Array([val])) : " ";
-    }
-    framebufferLines.push(line.padEnd(fbWidth, " "));
-  }
+  const framebufferLines =
+    new TextDecoder()
+      .decode(memory.slice(VRAM_BASE, VRAM_BASE + WIDTH * HEIGHT).map((v) => v || 20))
+      .match(new RegExp(`.{${WIDTH}}`, "g")) ?? [];
 
   lines.push(
     `\x1b[4m${"Reg | Val".padEnd(regWidth, " ")} │${" Memory".padEnd(
@@ -47,7 +41,7 @@ export function displayStats() {
   for (let row = 0; row < totalRows; ++row) {
     const regName = regNames[row] ?? "";
     const regVal = regName
-      ? registers[regName].toString(16).padStart(regValueWidth, " ")
+      ? registers[regName].toString(16).padStart(regValueWidth, " ").toUpperCase()
       : "".padEnd(regValueWidth, " ");
     const regText = regName
       ? `${regName.padEnd(maxRegNameWidth, " ")} ${regVal}`
@@ -59,7 +53,7 @@ export function displayStats() {
       let byte = 0;
       for (let b = 0; b < 8; ++b) {
         const addr = memOffset + i * 8 + b;
-        if (addr < memory.length && readMemory(addr, "B")) {
+        if (addr < memory.length && memory[addr]) {
           byte |= 1 << b;
         }
       }

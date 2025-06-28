@@ -3,8 +3,8 @@ import { parseASM } from "../asm";
 import { createRunner, writeMemory } from "..";
 
 const runner = createRunner(parseASM(readFileSync("scroll.s", "utf8")));
-const message = "Hello, World!;";
+const message = new TextEncoder().encode("Hello, World!;");
 for (let i = 0; i < message.length; ++i) {
-  writeMemory(i, message.charCodeAt(i), "B");
+  writeMemory(i, message[i]!, "B");
 }
 runner.execute();

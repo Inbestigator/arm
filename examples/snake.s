@@ -1,6 +1,6 @@
 MOV R7, #27        ; Cols
 MOV R8, #8         ; Rows
-MOV R9, #0x800     ; Current position index
+MOV R9, #0xA00     ; Current position index
 
 MOV R10, #0        ; direction: 0=right, 1=down, 2=left, 3=up
 MOV R11, #0        ; x
