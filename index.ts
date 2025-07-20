@@ -98,10 +98,7 @@ export function run(strings: TemplateStringsArray | string | string[]) {
         instruction: instruction.mnemonic,
         code: instr.toString(16).padStart(8, "0"),
       });
-
       instruction.execute(vars as never);
-      X[0] = 0;
-
       if (pc === currentPc) setPC(pc + 4);
     } catch (e) {
       console.error(e);
