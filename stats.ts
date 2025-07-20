@@ -7,15 +7,15 @@ export function displayStats(memory = defaultMem, registers: Record<string, numb
 
   const regNames = Object.keys(registers) as (keyof typeof registers)[];
 
-  const maxRegNameWidth = Math.max(4, ...regNames.map((r) => r.length));
-  const maxRegValueWidth = Math.max(5, ...regNames.map((r) => registers[r]!.toString(16).length));
+  const maxRegNameWidth = Math.max(5, ...regNames.map((r) => r.length));
+  const maxRegValueWidth = Math.max(6, ...regNames.map((r) => registers[r]!.toString(16).length));
   const regWidth = maxRegNameWidth + maxRegValueWidth;
 
   const brailleWidth = Math.floor(termWidth - regWidth - 2);
   const memoryBytesPerRow = brailleWidth * 8;
   const totalRows = termHeight - 1;
 
-  const brailleRows = Math.ceil(memory.length / memoryBytesPerRow);
+  const brailleRows = termHeight / 2;
 
   const lines: string[] = [];
 
