@@ -1,71 +1,65 @@
-import { memory, registers, type Register } from ".";
+import { stdout } from "bun";
+import { memory as defaultMem, X as defaultRegs } from "./data";
 
-const WIDTH = 27;
-const HEIGHT = 8;
-const VRAM_BASE = 0xa00;
-
-export function displayStats() {
+export function displayStats(memory = defaultMem, registers: Record<string, number> = defaultRegs) {
   const termWidth = process.stdout.columns || 80;
-  const termHeight = (process.stdout.rows || 24) - 1;
+  const termHeight = process.stdout.rows || 24;
 
-  const regNames = Object.keys(registers) as Register[];
+  const regNames = Object.keys(registers) as (keyof typeof registers)[];
 
-  const maxRegNameWidth = Math.max(...regNames.map((r) => r.length));
-  const regValueWidth = 5;
-  const regWidth = maxRegNameWidth + 1 + regValueWidth;
-  const fbWidth = WIDTH;
-  const gap = 4;
+  const maxRegNameWidth = Math.max(4, ...regNames.map((r) => r.length));
+  const maxRegValueWidth = Math.max(5, ...regNames.map((r) => registers[r]!.toString(16).length));
+  const regWidth = maxRegNameWidth + maxRegValueWidth;
 
-  const brailleWidth = Math.floor((termWidth - regWidth - fbWidth - gap) / 1);
+  const brailleWidth = Math.floor(termWidth - regWidth - 2);
   const memoryBytesPerRow = brailleWidth * 8;
   const totalRows = termHeight - 1;
 
+  const brailleRows = Math.ceil(memory.length / memoryBytesPerRow);
+
   const lines: string[] = [];
-  const brailleBase = 0x2800;
-
-  function getBrailleChar(byte: number): string {
-    return String.fromCharCode(brailleBase + byte);
-  }
-
-  const framebufferLines =
-    new TextDecoder()
-      .decode(memory.slice(VRAM_BASE, VRAM_BASE + WIDTH * HEIGHT).map((v) => v || 20))
-      .match(new RegExp(`.{${WIDTH}}`, "g")) ?? [];
 
   lines.push(
-    `\x1b[4m${"Reg | Val".padEnd(regWidth, " ")} │${" Memory".padEnd(
-      brailleWidth,
-      " "
-    )}│ ${"Frame buffer".padEnd(WIDTH, " ")}\x1b[0m`
+    `\x1b[4m${"Reg ".padEnd(maxRegNameWidth)}${"| Val ".padStart(
+      maxRegValueWidth + 1
+    )}│${" Memory".padEnd(brailleWidth)}\x1b[0m`
   );
+
   for (let row = 0; row < totalRows; ++row) {
-    const regName = regNames[row] ?? "";
-    const regVal = regName
-      ? registers[regName].toString(16).padStart(regValueWidth, " ").toUpperCase()
-      : "".padEnd(regValueWidth, " ");
+    const regName = regNames[row];
     const regText = regName
-      ? `${regName.padEnd(maxRegNameWidth, " ")} ${regVal}`
-      : "".padEnd(regWidth, " ");
+      ? regName.padEnd(maxRegNameWidth) +
+        registers[regName]!.toString(16).padStart(maxRegValueWidth).toUpperCase()
+      : " ".repeat(regWidth);
 
     const memOffset = row * memoryBytesPerRow;
-    const braille = [];
-    for (let i = 0; i < brailleWidth; ++i) {
-      let byte = 0;
-      for (let b = 0; b < 8; ++b) {
-        const addr = memOffset + i * 8 + b;
-        if (addr < memory.length && memory[addr]) {
-          byte |= 1 << b;
+
+    let memoryColumn = "";
+
+    if (row < brailleRows) {
+      const braille = [];
+      for (let i = 0; i < brailleWidth; ++i) {
+        let byte = 0;
+        for (let b = 0; b < 8; ++b) {
+          const addr = memOffset + i * 8 + b;
+          if (addr < memory.length && memory[addr]) {
+            byte |= 1 << b;
+          }
         }
+        braille.push(String.fromCharCode(0x2800 + byte));
       }
-      braille.push(getBrailleChar(byte));
+      memoryColumn = braille.join("");
+    } else {
+      const bytesPerHexRow = Math.floor(brailleWidth / 3);
+      const memAddr = 0xa00 + (row - brailleRows) * bytesPerHexRow;
+      const bytes = memory.slice(memAddr, memAddr + bytesPerHexRow);
+      memoryColumn = Array.from(bytes)
+        .map((b) => (b === 0 ? `\x1b[2m00\x1b[0m` : b.toString(16).padStart(2, "0").toUpperCase()))
+        .join(" ");
     }
 
-    const fbText = framebufferLines[row] ?? "".padEnd(fbWidth, " ");
-
-    lines.push(`${regText} │${braille.join("")}│ ${fbText}`);
+    lines.push(`${regText} │${memoryColumn}`);
   }
 
-  console.clear();
-  console.log(lines.join("\n"));
+  stdout.write("\x1b[H" + lines.join("\n"));
 }
-// parseInt("E890000E",16).toString(2)

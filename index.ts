@@ -1,135 +1,112 @@
-import { is, type Mnemonic } from "./instructions";
+import { emitKeypressEvents, type Key } from "node:readline";
+import { memory, memView, pc, setPC, X } from "./data";
+import { is } from "./instruction-set";
 import { displayStats } from "./stats";
+import { stdout } from "bun";
 
-const MEM_SIZE = 0x1000;
+type EncodedVar = `${number}` | `${number}:${number}`;
 
-export type Register = keyof typeof registers;
-export type Operand = Register | `#${number}`;
-interface Condition {
-  v: "N" | "Z" | "C" | "V";
-  eq?: Condition["v"] | 0 | 1;
-  ne?: Condition["v"] | 0 | 1;
-}
-export interface Instruction {
-  mnemonic: Mnemonic;
-  operands: (Operand | Operand[])[];
-  mode?: "IA" | "IB" | "DA" | "DB" | "B" | "H";
-  conditions: (Condition[] | Condition)[];
-}
+const xd = "11:7";
+const xs1 = "19:15";
+const xs2 = "24:20";
 
-export const registers = {
-  R0: 0,
-  R1: 0,
-  R2: 0,
-  R3: 0,
-  R4: 0,
-  R5: 0,
-  R6: 0,
-  R7: 0,
-  R8: 0,
-  R9: 0,
-  R10: 0,
-  R11: 0,
-  R12: 0,
-  R13: MEM_SIZE,
-  R14: 0,
-  R15: 0,
-};
-export const flags = {
-  carry: 0,
-  tbit: 0,
-  cpsr: 0x60000013,
-};
-export const memory = new Uint8Array(MEM_SIZE);
+type Encoding = Record<string, EncodedVar | { bits: EncodedVar[]; shift: number }>;
+export type EncodingType = keyof typeof encodings;
 
-export function writeRegister(register: Register, value: number) {
-  registers[register] = value >>> 0;
+export const encodings = {
+  R: { xd, xs1, xs2 },
+  I: { imm: "31:20", xd, xs1 },
+  S: {
+    imm: { bits: ["31:25", "11:7"], shift: 0 },
+    xs1,
+    xs2,
+  },
+  B: {
+    imm: { bits: ["31", "7", "30:25", "11:8"], shift: 1 },
+    xs1,
+    xs2,
+  },
+  U: {
+    imm: { bits: ["31:12"], shift: 12 },
+    xd,
+  },
+  J: { imm: { bits: ["31", "19:12", "20", "30:21"], shift: 1 }, xd },
+} satisfies Record<string, Encoding>;
+
+function decode(binary: string, encoded: EncodedVar) {
+  return encoded.includes(":")
+    ? binary.slice(...encoded.split(":").map((v, i) => 31 * (1 - i) - Number(v)))
+    : binary[31 - Number(encoded)]!;
 }
 
-export function writeMemory(address: number, value: number, mode?: "B" | "H") {
-  value >>>= 0;
-  memory[address] = value & 0xff;
-  if (mode === "B") return;
-  memory[address + 1] = (value >>> 8) & 0xff;
-  if (mode === "H") return;
-  memory[address + 2] = (value >>> 16) & 0xff;
-  memory[address + 3] = (value >>> 24) & 0xff;
-}
-
-export function readMemory(address: number, mode?: "B" | "H"): number {
-  switch (mode) {
-    case "B":
-      return memory[address]! >>> 0;
-    case "H":
-      return (memory[address]! | (memory[address + 1]! << 8)) >>> 0;
-    default:
-      return (
-        (memory[address]! |
-          (memory[address + 1]! << 8) |
-          (memory[address + 2]! << 16) |
-          (memory[address + 3]! << 24)) >>>
-        0
-      );
-  }
-}
-
-function getCPSRFlag(flag: "N" | "Z" | "C" | "V") {
-  const shift = { N: 31, Z: 30, C: 29, V: 28 }[flag];
-  return (flags.cpsr >>> shift) & 1;
-}
-
-function checkCondition(condition: Condition[] | Condition): boolean {
-  if (Array.isArray(condition)) {
-    return condition.some(checkCondition);
-  }
-
-  const { v, eq, ne } = condition;
-  const val = getCPSRFlag(v);
-
-  if (eq !== undefined) {
-    return typeof eq === "number" ? val === eq : val === getCPSRFlag(eq);
-  }
-  if (ne !== undefined) {
-    return typeof ne === "number" ? val !== ne : val !== getCPSRFlag(ne);
-  }
-
-  return false;
-}
-
-export function createRunner(instructions: Instruction[]) {
-  const runner = {
-    execute() {
-      const intervalId = setInterval(() => {
-        const done = runner.step();
-        displayStats();
-        if (done) {
-          clearInterval(intervalId);
-        }
-      });
-    },
-    step() {
-      if (registers.R15 >= instructions.length || !instructions[registers.R15]) return true;
-      const { mnemonic, operands, conditions, mode } = instructions[registers.R15]!;
-      if (conditions.every(checkCondition)) {
-        const operation = is[mnemonic];
-        if (operation) {
-          // @ts-expect-error
-          operation(...operands, mode);
-        } else {
-          console.error("Unknown mnemonic:", mnemonic);
-        }
+function parse(instrNum: number) {
+  const binary = instrNum.toString(2).padStart(32, "0");
+  const opcode = binary.slice(25);
+  const instruction = is.find(
+    (i) =>
+      i.opcode === opcode &&
+      (!i.funct3 || (i.funct3 && i.funct3 === decode(binary, "14:12"))) &&
+      (!i.funct7 || (i.funct7 && i.funct7 === decode(binary, "31:25"))) &&
+      (!i.funct12 || (i.funct12 && i.funct12 === decode(binary, "31:20")))
+  );
+  if (!instruction) throw `Unknown instruction: ${instrNum.toString(16).padStart(8, "0")}`;
+  const vars = Object.entries(encodings[instruction.type]).map(
+    ([k, v]: [string, Encoding[string]]) => {
+      if (typeof v === "string") {
+        return [k, decode(binary, v)] as const;
       }
-      ++registers.R15;
-    },
-    reset() {
-      for (const key of Object.keys(registers)) {
-        registers[key as Register] = 0;
-      }
-      flags.carry = 0;
-      flags.tbit = 0;
-      flags.cpsr = 0x60000013;
-      memory.fill(0);
-    },
+      return [k, v.bits.map((b) => decode(binary, b)).join("") + "0".repeat(v.shift)] as const;
+    }
+  );
+  return {
+    instruction,
+    vars: Object.fromEntries(
+      vars.map(([k, v]) => [k, Object.assign(parseInt(v, 2), { length: v.length })])
+    ),
   };
-  return runner;
+}
+
+const trace: { instruction: string; code: string }[] = [];
+
+export function run(strings: TemplateStringsArray | string | string[]) {
+  const stringified = strings.toString().replaceAll(/[^a-fAF0-9]/g, "");
+
+  for (let i = 0; i < stringified.length / 8; ++i) {
+    const instr = parseInt(stringified.slice(i * 8, i * 8 + 8), 16);
+    memView.setUint32(i * 4, instr, true);
+  }
+
+  emitKeypressEvents(process.stdin);
+  process.stdin.setRawMode(true);
+  stdout.write("\x1b[?25l");
+
+  process.stdin.on("data", async (data) => {
+    if (data.length === 1 && data[0] === 0x03) {
+      stdout.write("\x1b[?25h");
+      process.exit();
+    }
+    const charcode = data[0];
+    memView.setUint32(0x00ffff, charcode!, true);
+  });
+
+  setInterval(() => {
+    try {
+      const instr = memView.getUint32(pc, true);
+      const currentPc = pc;
+      const { instruction, vars } = parse(instr);
+      trace.unshift({
+        instruction: instruction.mnemonic,
+        code: instr.toString(16).padStart(8, "0"),
+      });
+
+      instruction.execute(vars as never);
+      X[0] = 0;
+
+      if (pc === currentPc) setPC(pc + 4);
+    } catch (e) {
+      console.error(e);
+      console.table(trace.slice(0, 10));
+      process.exit();
+    }
+  });
 }

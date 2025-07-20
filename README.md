@@ -1,5 +1,3 @@
-# ARM JS
+# RISC-V JS
 
-A JS implementation of the ARM specification and a simple ASM interpreter.
-
-Instruction set used: https://iitd-plos.github.io/col718/ref/arm-instructionset.pdf
+A JS implementation of the RISC-V (32I) specification.
